@@ -15,6 +15,7 @@ type YtDlpSearchResult = {
 	url?: string;
 	description?: string;
 	thumbnail?: string;
+	duration?: number;
 };
 
 export class YtDlpSearchProvider implements SearchProvider {
@@ -45,6 +46,7 @@ export class YtDlpSearchProvider implements SearchProvider {
 					channelTitle: item.channel ?? item.uploader ?? item.channel_id ?? 'Unknown channel',
 					publishedAt: formatUploadDate(item.upload_date),
 					url: item.webpage_url ?? item.url ?? `https://www.youtube.com/watch?v=${item.id}`,
+					durationSeconds: item.duration,
 					thumbnailUrl: item.thumbnail,
 					description: item.description
 				}));

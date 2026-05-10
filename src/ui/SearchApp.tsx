@@ -14,7 +14,7 @@ type Props = {
 type ScreenState =
 	| {status: 'loading'}
 	| {status: 'ready'; results: SearchResult[]; selectedIndex: number; providerName: string}
-	| {status: 'selected'; results: SearchResult[]; selectedIndex: number; session: PlaybackSession; providerName: string}
+	| {status: 'selected'; results: SearchResult[]; selectedIndex: number; session: PlaybackSession; providerName: string; isPaused: boolean}
 	| {status: 'error'; message: string};
 
 export function SearchApp({query}: Props): React.ReactElement {
@@ -56,6 +56,12 @@ export function SearchApp({query}: Props): React.ReactElement {
 		};
 	}, [provider, query]);
 
+	useEffect(() => {
+		return () => {
+			youtubePlayer.stop();
+		};
+	}, []);
+
 	return (
 		<Box flexDirection="column" gap={1}>
 			{process.stdin.isTTY && <InputControls state={state} setState={setState} />}
@@ -72,7 +78,7 @@ export function SearchApp({query}: Props): React.ReactElement {
 				<>
 					<ProviderBadge name={state.providerName} />
 					<Results results={state.results} selectedIndex={state.selectedIndex} />
-					<PlayerPanel session={state.session} />
+					<PlayerPanel session={state.session} track={state.results[state.selectedIndex]} isPaused={state.isPaused} />
 				</>
 			)}
 			<Footer />
@@ -100,6 +106,31 @@ function InputControls({
 			return;
 		}
 
+		if (state.status === 'selected') {
+			if (input === 's') {
+				youtubePlayer.stop();
+				setState({
+					...state,
+					isPaused: false,
+					session: {
+						state: 'stopped',
+						message: 'Playback stopped.'
+					}
+				});
+				return;
+			}
+
+			if (input === ' ') {
+				const nextState = youtubePlayer.togglePause();
+
+				if (nextState !== 'unchanged') {
+					setState({...state, isPaused: nextState === 'paused'});
+				}
+
+				return;
+			}
+		}
+
 		if (key.upArrow) {
 			setState({
 				...state,
@@ -124,7 +155,7 @@ function InputControls({
 			}
 
 			void youtubePlayer.play(track).then((session) => {
-				setState({...state, status: 'selected', session});
+				setState({...state, status: 'selected', session, isPaused: false});
 			});
 		}
 	});
@@ -169,13 +200,51 @@ function ProviderBadge({name}: {name: string}): React.ReactElement {
 	return <Text dimColor>Search provider: {name}</Text>;
 }
 
-function PlayerPanel({session}: {session: PlaybackSession}): React.ReactElement {
+function PlayerPanel({
+	session,
+	track,
+	isPaused
+}: {
+	session: PlaybackSession;
+	track: SearchResult | undefined;
+	isPaused: boolean;
+}): React.ReactElement {
+	const [tick, setTick] = useState(0);
+
+	useEffect(() => {
+		if (session.state !== 'playing' || isPaused) {
+			return;
+		}
+
+		const interval = setInterval(() => {
+			setTick((value) => value + 1);
+		}, 1000);
+
+		return () => {
+			clearInterval(interval);
+		};
+	}, [isPaused, session.state]);
+
+	const elapsedSeconds = youtubePlayer.getElapsedSeconds();
+	const durationSeconds = track?.durationSeconds;
+	const progress = durationSeconds ? Math.min(1, elapsedSeconds / durationSeconds) : 0;
+	const statusLabel = session.state === 'playing' ? (isPaused ? 'Paused' : 'Playing') : capitalize(session.state);
+	void tick;
+
 	return (
 		<Box borderStyle="round" borderColor="yellow" paddingX={1} flexDirection="column">
-			<Text color="yellow">Playback</Text>
-			{session.message.split('\n').map((line) => (
-				<Text key={line}>{line}</Text>
-			))}
+			<Text color="yellow">{statusLabel}</Text>
+			{session.state === 'playing' && track ? (
+				<>
+					<Text>{track.title}</Text>
+					<Text>
+						{formatDuration(elapsedSeconds)} {renderProgress(progress, Boolean(durationSeconds))} {durationSeconds ? formatDuration(durationSeconds) : '--:--'}
+					</Text>
+					<Text dimColor>Space pause/resume · s stop · q quit</Text>
+				</>
+			) : (
+				session.message.split('\n').map((line) => <Text key={line}>{line}</Text>)
+			)}
 		</Box>
 	);
 }
@@ -193,5 +262,22 @@ function ErrorMessage({message}: {message: string}): React.ReactElement {
 }
 
 function Footer(): React.ReactElement {
-	return <Text dimColor>Arrow keys choose · Enter select · q quit</Text>;
+	return <Text dimColor>Arrow keys choose · Enter play · Space pause/resume · s stop · q quit</Text>;
+}
+
+function renderProgress(progress: number, hasDuration: boolean): string {
+	const width = 24;
+	const filled = hasDuration ? Math.round(progress * width) : 0;
+
+	return `${'━'.repeat(filled)}${'─'.repeat(width - filled)}`;
+}
+
+function formatDuration(seconds: number): string {
+	const minutes = Math.floor(seconds / 60);
+	const remainingSeconds = Math.floor(seconds % 60);
+	return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+function capitalize(value: string): string {
+	return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }

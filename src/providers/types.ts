@@ -7,6 +7,7 @@ export type SearchResult = {
 	channelTitle: string;
 	publishedAt: string;
 	url: string;
+	durationSeconds?: number;
 	thumbnailUrl?: string;
 	description?: string;
 };

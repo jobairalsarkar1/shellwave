@@ -24,6 +24,16 @@ or:
 shellwave search "lofi coding music"
 ```
 
+Controls:
+
+```text
+Arrow keys choose
+Enter play
+Space pause/resume
+s stop
+q quit
+```
+
 ## YouTube Search
 
 No API key or external binary is required for the default search flow.

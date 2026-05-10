@@ -9,6 +9,9 @@ type InnerTubeVideoNode = {
 	author?: {name?: string};
 	published?: {toString(): string};
 	best_thumbnail?: {url?: string};
+	duration?: {
+		seconds?: number;
+	};
 };
 
 export class InnerTubeSearchProvider implements SearchProvider {
@@ -33,6 +36,7 @@ export class InnerTubeSearchProvider implements SearchProvider {
 						channelTitle: video.author?.name ?? 'Unknown channel',
 						publishedAt: video.published?.toString() ?? '',
 						url: `https://www.youtube.com/watch?v=${id}`,
+						durationSeconds: video.duration?.seconds,
 						thumbnailUrl: video.best_thumbnail?.url,
 						description: video.description
 					} satisfies SearchResult;
