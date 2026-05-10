@@ -1,18 +1,19 @@
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
 import {spawn, spawnSync, type ChildProcess} from 'node:child_process';
-import type {Readable, Writable} from 'node:stream';
 import type {SearchResult} from '../providers/types.js';
 import type {PlaybackSession, Player} from './types.js';
 
+const execFileAsync = promisify(execFile);
+const SEEK_STEP_SECONDS = 10;
+
 class YouTubePlayer implements Player {
 	#process?: ChildProcess;
-	#resolverProcess?: ChildProcess;
+	#streamUrl?: string;
 	#startedAt?: number;
 	#pausedAt?: number;
 	#pausedMs = 0;
-	#pipe?: {
-		source: Readable;
-		target: Writable;
-	};
+	#offsetSeconds = 0;
 
 	async play(track: SearchResult): Promise<PlaybackSession> {
 		this.stop();
@@ -42,55 +43,8 @@ class YouTubePlayer implements Player {
 		}
 
 		try {
-			const resolverProcess = spawn('yt-dlp', ['--no-playlist', '--quiet', '--no-warnings', '-f', 'bestaudio', '-o', '-', track.url], {
-				detached: process.platform !== 'win32',
-				stdio: ['ignore', 'pipe', 'pipe'],
-				windowsHide: true
-			});
-			const playerProcess = spawn('ffplay', ['-nodisp', '-autoexit', '-loglevel', 'warning', '-i', 'pipe:0'], {
-				detached: process.platform !== 'win32',
-				stdio: ['pipe', 'ignore', 'pipe'],
-				windowsHide: true
-			});
-
-			this.#process = playerProcess;
-			this.#resolverProcess = resolverProcess;
-			this.#startedAt = Date.now();
-			this.#pausedAt = undefined;
-			this.#pausedMs = 0;
-			let resolverOutputStarted = false;
-			let stderr = '';
-
-			resolverProcess.stdout.once('data', () => {
-				resolverOutputStarted = true;
-			});
-
-			resolverProcess.stderr.on('data', (chunk: Buffer) => {
-				stderr += chunk.toString();
-			});
-
-			playerProcess.stderr.on('data', (chunk: Buffer) => {
-				stderr += chunk.toString();
-			});
-
-			ignoreExpectedPipeErrors(resolverProcess.stdout);
-			ignoreExpectedPipeErrors(playerProcess.stdin);
-			this.#pipe = {
-				source: resolverProcess.stdout,
-				target: playerProcess.stdin
-			};
-			resolverProcess.stdout.pipe(playerProcess.stdin);
-
-			resolverProcess.once('error', () => {
-				this.stop();
-			});
-
-			playerProcess.once('exit', () => {
-				killProcess(resolverProcess);
-				this.clearProcesses();
-			});
-
-			const startupError = await waitForStartup(resolverProcess, playerProcess, () => resolverOutputStarted, () => stderr);
+			this.#streamUrl = await resolveAudioUrl(track.url);
+			const startupError = await this.startPlayerAt(0);
 
 			if (startupError) {
 				this.stop();
@@ -120,11 +74,8 @@ class YouTubePlayer implements Player {
 	}
 
 	stop(): void {
-		this.closePipe();
-		killProcess(this.#resolverProcess);
 		killProcess(this.#process);
-
-		this.clearProcesses();
+		this.clearState();
 	}
 
 	pause(): boolean {
@@ -132,7 +83,6 @@ class YouTubePlayer implements Player {
 			return false;
 		}
 
-		signalProcess(this.#resolverProcess, 'SIGSTOP');
 		signalProcess(this.#process, 'SIGSTOP');
 		this.#pausedAt = Date.now();
 		return true;
@@ -145,7 +95,6 @@ class YouTubePlayer implements Player {
 
 		this.#pausedMs += Date.now() - this.#pausedAt;
 		this.#pausedAt = undefined;
-		signalProcess(this.#resolverProcess, 'SIGCONT');
 		signalProcess(this.#process, 'SIGCONT');
 		return true;
 	}
@@ -158,33 +107,105 @@ class YouTubePlayer implements Player {
 		return this.pause() ? 'paused' : 'unchanged';
 	}
 
+	seekBackward(durationSeconds?: number): boolean {
+		return this.seekBy(-SEEK_STEP_SECONDS, durationSeconds);
+	}
+
+	seekForward(durationSeconds?: number): boolean {
+		return this.seekBy(SEEK_STEP_SECONDS, durationSeconds);
+	}
+
 	getElapsedSeconds(): number {
 		if (!this.#startedAt) {
 			return 0;
 		}
 
 		const now = this.#pausedAt ?? Date.now();
-		return Math.max(0, Math.floor((now - this.#startedAt - this.#pausedMs) / 1000));
+		const elapsedSinceStart = Math.max(0, Math.floor((now - this.#startedAt - this.#pausedMs) / 1000));
+		return this.#offsetSeconds + elapsedSinceStart;
 	}
 
-	clearProcesses(): void {
-		this.closePipe();
+	async startPlayerAt(offsetSeconds: number): Promise<string | undefined> {
+		if (!this.#streamUrl) {
+			return 'Playback failed: audio URL was not resolved.';
+		}
+
+		killProcess(this.#process);
+
+		const args = ['-nodisp', '-autoexit', '-loglevel', 'warning'];
+
+		if (offsetSeconds > 0) {
+			args.push('-ss', String(offsetSeconds));
+		}
+
+		args.push('-i', this.#streamUrl);
+
+		const playerProcess = spawn('ffplay', args, {
+			detached: process.platform !== 'win32',
+			stdio: ['ignore', 'ignore', 'pipe'],
+			windowsHide: true
+		});
+
+		this.#process = playerProcess;
+		this.#startedAt = Date.now();
+		this.#pausedAt = undefined;
+		this.#pausedMs = 0;
+		this.#offsetSeconds = offsetSeconds;
+
+		let stderr = '';
+
+		playerProcess.stderr?.on('data', (chunk: Buffer) => {
+			stderr += chunk.toString();
+		});
+
+		playerProcess.once('exit', () => {
+			if (this.#process === playerProcess) {
+				this.clearState({keepStreamUrl: true});
+			}
+		});
+
+		return await waitForPlayerStartup(playerProcess, () => stderr);
+	}
+
+	seekBy(deltaSeconds: number, durationSeconds?: number): boolean {
+		if (!this.#streamUrl || !this.#process) {
+			return false;
+		}
+
+		const targetSeconds = clamp(this.getElapsedSeconds() + deltaSeconds, 0, durationSeconds);
+		void this.startPlayerAt(targetSeconds);
+		return true;
+	}
+
+	clearState({keepStreamUrl = false}: {keepStreamUrl?: boolean} = {}): void {
 		this.#process = undefined;
-		this.#resolverProcess = undefined;
 		this.#startedAt = undefined;
 		this.#pausedAt = undefined;
 		this.#pausedMs = 0;
-	}
+		this.#offsetSeconds = 0;
 
-	closePipe(): void {
-		if (!this.#pipe) {
-			return;
+		if (!keepStreamUrl) {
+			this.#streamUrl = undefined;
 		}
-
-		this.#pipe.source.unpipe(this.#pipe.target);
-		this.#pipe.target.destroy();
-		this.#pipe = undefined;
 	}
+}
+
+async function resolveAudioUrl(url: string): Promise<string> {
+	const {stdout} = await execFileAsync('yt-dlp', ['--no-playlist', '--quiet', '--no-warnings', '-f', 'bestaudio', '--get-url', url], {
+		maxBuffer: 1024 * 1024,
+		timeout: 30_000,
+		windowsHide: true
+	});
+	const audioUrl = stdout
+		.split('\n')
+		.map((line) => line.trim())
+		.find(Boolean);
+
+	if (!audioUrl) {
+		throw new Error('yt-dlp did not return a playable audio URL.');
+	}
+
+	return audioUrl;
 }
 
 function hasCommand(command: string): boolean {
@@ -225,41 +246,16 @@ function signalProcess(childProcess: ChildProcess | undefined, signal: NodeJS.Si
 	}
 }
 
-function ignoreExpectedPipeErrors(stream: Readable | Writable): void {
-	stream.on('error', (error: NodeJS.ErrnoException) => {
-		if (error.code === 'EPIPE' || error.code === 'ERR_STREAM_PREMATURE_CLOSE') {
-			return;
-		}
-
-		throw error;
-	});
-}
-
-async function waitForStartup(
-	resolverProcess: ChildProcess,
-	playerProcess: ChildProcess,
-	hasResolverOutput: () => boolean,
-	getStderr: () => string
-): Promise<string | undefined> {
+async function waitForPlayerStartup(playerProcess: ChildProcess, getStderr: () => string): Promise<string | undefined> {
 	return await new Promise((resolve) => {
 		const timeout = setTimeout(() => {
 			resolve(undefined);
 		}, 2500);
 
-		const finish = (message: string | undefined) => {
-			clearTimeout(timeout);
-			resolve(message);
-		};
-
-		resolverProcess.once('exit', (code) => {
-			if (code && code !== 0 && !hasResolverOutput()) {
-				finish(formatStartupError('yt-dlp failed before producing audio.', getStderr()));
-			}
-		});
-
 		playerProcess.once('exit', (code) => {
 			if (code && code !== 0) {
-				finish(formatStartupError('ffplay stopped before audio could start.', getStderr()));
+				clearTimeout(timeout);
+				resolve(formatStartupError('ffplay stopped before audio could start.', getStderr()));
 			}
 		});
 	});
@@ -274,6 +270,14 @@ function formatStartupError(summary: string, stderr: string): string {
 		.join('\n');
 
 	return details ? `${summary}\n${details}` : summary;
+}
+
+function clamp(value: number, minimum: number, maximum?: number): number {
+	if (maximum === undefined || Number.isNaN(maximum)) {
+		return Math.max(minimum, value);
+	}
+
+	return Math.min(maximum, Math.max(minimum, value));
 }
 
 export const youtubePlayer = new YouTubePlayer();

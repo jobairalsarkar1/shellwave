@@ -111,11 +111,7 @@ function InputControls({
 				youtubePlayer.stop();
 				setState({
 					...state,
-					isPaused: false,
-					session: {
-						state: 'stopped',
-						message: 'Playback stopped.'
-					}
+					status: 'ready'
 				});
 				return;
 			}
@@ -125,6 +121,22 @@ function InputControls({
 
 				if (nextState !== 'unchanged') {
 					setState({...state, isPaused: nextState === 'paused'});
+				}
+
+				return;
+			}
+
+			if (key.leftArrow) {
+				if (youtubePlayer.seekBackward(state.results[state.selectedIndex]?.durationSeconds)) {
+					setState({...state, isPaused: false});
+				}
+
+				return;
+			}
+
+			if (key.rightArrow) {
+				if (youtubePlayer.seekForward(state.results[state.selectedIndex]?.durationSeconds)) {
+					setState({...state, isPaused: false});
 				}
 
 				return;
@@ -240,7 +252,7 @@ function PlayerPanel({
 					<Text>
 						{formatDuration(elapsedSeconds)} {renderProgress(progress, Boolean(durationSeconds))} {durationSeconds ? formatDuration(durationSeconds) : '--:--'}
 					</Text>
-					<Text dimColor>Space pause/resume · s stop · q quit</Text>
+					<Text dimColor>Left/right seek · Space pause/resume · s stop · q quit</Text>
 				</>
 			) : (
 				session.message.split('\n').map((line) => <Text key={line}>{line}</Text>)
@@ -262,7 +274,7 @@ function ErrorMessage({message}: {message: string}): React.ReactElement {
 }
 
 function Footer(): React.ReactElement {
-	return <Text dimColor>Arrow keys choose · Enter play · Space pause/resume · s stop · q quit</Text>;
+	return <Text dimColor>Up/down choose · Enter play · Left/right seek · Space pause/resume · s stop · q quit</Text>;
 }
 
 function renderProgress(progress: number, hasDuration: boolean): string {

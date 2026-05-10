@@ -27,8 +27,9 @@ shellwave search "lofi coding music"
 Controls:
 
 ```text
-Arrow keys choose
+Up/down choose
 Enter play
+Left/right seek
 Space pause/resume
 s stop
 q quit
