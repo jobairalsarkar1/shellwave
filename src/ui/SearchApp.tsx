@@ -14,7 +14,15 @@ type Props = {
 type ScreenState =
 	| {status: 'loading'}
 	| {status: 'ready'; results: SearchResult[]; selectedIndex: number; providerName: string}
-	| {status: 'selected'; results: SearchResult[]; selectedIndex: number; session: PlaybackSession; providerName: string; isPaused: boolean}
+	| {
+			status: 'selected';
+			results: SearchResult[];
+			selectedIndex: number;
+			playingTrack: SearchResult;
+			session: PlaybackSession;
+			providerName: string;
+			isPaused: boolean;
+	  }
 	| {status: 'error'; message: string};
 
 export function SearchApp({query}: Props): React.ReactElement {
@@ -78,7 +86,7 @@ export function SearchApp({query}: Props): React.ReactElement {
 				<>
 					<ProviderBadge name={state.providerName} />
 					<Results results={state.results} selectedIndex={state.selectedIndex} />
-					<PlayerPanel session={state.session} track={state.results[state.selectedIndex]} isPaused={state.isPaused} />
+					<PlayerPanel session={state.session} track={state.playingTrack} isPaused={state.isPaused} />
 				</>
 			)}
 			<Footer />
@@ -127,7 +135,7 @@ function InputControls({
 			}
 
 			if (key.leftArrow) {
-				if (youtubePlayer.seekBackward(state.results[state.selectedIndex]?.durationSeconds)) {
+				if (youtubePlayer.seekBackward(state.playingTrack.durationSeconds)) {
 					setState({...state, isPaused: false});
 				}
 
@@ -135,7 +143,7 @@ function InputControls({
 			}
 
 			if (key.rightArrow) {
-				if (youtubePlayer.seekForward(state.results[state.selectedIndex]?.durationSeconds)) {
+				if (youtubePlayer.seekForward(state.playingTrack.durationSeconds)) {
 					setState({...state, isPaused: false});
 				}
 
@@ -169,6 +177,7 @@ function InputControls({
 			setState({
 				...state,
 				status: 'selected',
+				playingTrack: track,
 				isPaused: false,
 				session: {
 					state: 'idle',
@@ -177,7 +186,7 @@ function InputControls({
 			});
 
 			void youtubePlayer.play(track).then((session) => {
-				setState({...state, status: 'selected', session, isPaused: false});
+				setState({...state, status: 'selected', playingTrack: track, session, isPaused: false});
 			});
 		}
 	});
