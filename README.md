@@ -60,24 +60,33 @@ SHELLWAVE_SEARCH_PROVIDER=yt-dlp shellwave lofi coding music
 
 ## Playback
 
-Audio playback uses `ffplay`, which ships with FFmpeg. Install FFmpeg and make sure `ffplay` is on your `PATH`.
+Audio playback uses `yt-dlp` to resolve YouTube audio and `ffplay` to play it. `ffplay` ships with FFmpeg.
 
 Ubuntu/Debian:
 
 ```bash
 sudo apt install ffmpeg
+python3 -m pip install --user -U yt-dlp
 ```
 
 macOS:
 
 ```bash
 brew install ffmpeg
+brew install yt-dlp
 ```
 
 Windows:
 
 ```powershell
 winget install Gyan.FFmpeg
+winget install yt-dlp.yt-dlp
+```
+
+If playback fails with a `yt-dlp` extraction error, update `yt-dlp`:
+
+```bash
+python3 -m pip install --user -U yt-dlp
 ```
 
 ## Roadmap
