@@ -1,4 +1,5 @@
 import {spawn, spawnSync, type ChildProcess} from 'node:child_process';
+import type {Readable, Writable} from 'node:stream';
 import type {SearchResult} from '../providers/types.js';
 import type {PlaybackSession, Player} from './types.js';
 
@@ -8,6 +9,10 @@ class YouTubePlayer implements Player {
 	#startedAt?: number;
 	#pausedAt?: number;
 	#pausedMs = 0;
+	#pipe?: {
+		source: Readable;
+		target: Writable;
+	};
 
 	async play(track: SearchResult): Promise<PlaybackSession> {
 		this.stop();
@@ -68,6 +73,12 @@ class YouTubePlayer implements Player {
 				stderr += chunk.toString();
 			});
 
+			ignoreExpectedPipeErrors(resolverProcess.stdout);
+			ignoreExpectedPipeErrors(playerProcess.stdin);
+			this.#pipe = {
+				source: resolverProcess.stdout,
+				target: playerProcess.stdin
+			};
 			resolverProcess.stdout.pipe(playerProcess.stdin);
 
 			resolverProcess.once('error', () => {
@@ -109,6 +120,7 @@ class YouTubePlayer implements Player {
 	}
 
 	stop(): void {
+		this.closePipe();
 		killProcess(this.#resolverProcess);
 		killProcess(this.#process);
 
@@ -156,11 +168,22 @@ class YouTubePlayer implements Player {
 	}
 
 	clearProcesses(): void {
+		this.closePipe();
 		this.#process = undefined;
 		this.#resolverProcess = undefined;
 		this.#startedAt = undefined;
 		this.#pausedAt = undefined;
 		this.#pausedMs = 0;
+	}
+
+	closePipe(): void {
+		if (!this.#pipe) {
+			return;
+		}
+
+		this.#pipe.source.unpipe(this.#pipe.target);
+		this.#pipe.target.destroy();
+		this.#pipe = undefined;
 	}
 }
 
@@ -200,6 +223,16 @@ function signalProcess(childProcess: ChildProcess | undefined, signal: NodeJS.Si
 	} catch {
 		childProcess.kill(signal);
 	}
+}
+
+function ignoreExpectedPipeErrors(stream: Readable | Writable): void {
+	stream.on('error', (error: NodeJS.ErrnoException) => {
+		if (error.code === 'EPIPE' || error.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+			return;
+		}
+
+		throw error;
+	});
 }
 
 async function waitForStartup(
