@@ -1,10 +1,8 @@
 # shellwave
 
-A terminal-first audio companion for developers.
+A terminal-first YouTube audio player for developers.
 
-`shellwave` starts with YouTube search in the terminal. By default it uses a bundled no-key YouTube search provider. If you set `YOUTUBE_API_KEY`, it switches to the official YouTube Data API.
-
-The official YouTube Data API returns video metadata, not playable audio streams, so YouTube results are currently shown as discoverable tracks with a clear handoff.
+Search from your terminal, pick a result with the keyboard, and play audio without opening a browser.
 
 ## Install
 
@@ -12,7 +10,71 @@ The official YouTube Data API returns video metadata, not playable audio streams
 npm install -g shellwave
 ```
 
+## Requirements
+
+Search works out of the box. Playback needs:
+
+- `ffplay`, included with FFmpeg
+- `yt-dlp`, used to resolve YouTube audio URLs
+
+Ubuntu/Debian:
+
+```bash
+sudo apt install ffmpeg
+sudo apt install pipx
+pipx install yt-dlp
+```
+
+If your shell cannot find `yt-dlp`, add `~/.local/bin` to your path.
+
+fish:
+
+```bash
+fish_add_path ~/.local/bin
+```
+
+Bash/Zsh:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Alternative pip install:
+
+```bash
+sudo apt install python3-pip
+python3 -m pip install --user -U yt-dlp
+```
+
+If Ubuntu blocks pip with an externally managed environment warning, use the `pipx` method above.
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+macOS:
+
+```bash
+brew install ffmpeg yt-dlp
+```
+
+Windows:
+
+```powershell
+winget install Gyan.FFmpeg
+winget install yt-dlp.yt-dlp
+```
+
+Check your setup:
+
+```bash
+ffplay -version
+yt-dlp --version
+```
+
 ## Usage
+
+Search and play:
 
 ```bash
 shellwave lofi coding music
@@ -27,83 +89,75 @@ shellwave search "lofi coding music"
 Controls:
 
 ```text
-Up/down choose
-Enter play
-Left/right seek
-Space pause/resume
-s stop
-q quit
+Up/down      choose a search result
+Enter        play selected result
+Left/right   seek backward/forward
+Space        pause/resume
+s            stop and return to results
+q            quit
 ```
 
-## YouTube Search
+## Search Providers
 
-No API key or external binary is required for the default search flow.
+By default, `shellwave` uses a bundled no-key YouTube search provider. You do not need a YouTube API key for normal use.
 
-To force the bundled no-key provider:
+Force the default no-key provider:
 
 ```bash
 SHELLWAVE_SEARCH_PROVIDER=youtubei shellwave lofi coding music
 ```
 
-To use the official YouTube Data API instead, create a YouTube Data API key in Google Cloud, then expose it as:
+Use the official YouTube Data API for search metadata:
 
 ```bash
 export YOUTUBE_API_KEY=your_key
+SHELLWAVE_SEARCH_PROVIDER=youtube-api shellwave lofi coding music
 ```
 
 PowerShell:
 
 ```powershell
 $env:YOUTUBE_API_KEY="your_key"
+$env:SHELLWAVE_SEARCH_PROVIDER="youtube-api"
+shellwave lofi coding music
 ```
 
-To force official API mode:
-
-```bash
-SHELLWAVE_SEARCH_PROVIDER=youtube-api shellwave lofi coding music
-```
-
-To force `yt-dlp` mode, install `yt-dlp` and run:
+Use `yt-dlp` for search:
 
 ```bash
 SHELLWAVE_SEARCH_PROVIDER=yt-dlp shellwave lofi coding music
 ```
 
-## Playback
+## Troubleshooting
 
-Audio playback uses `yt-dlp` to resolve YouTube audio and `ffplay` to play it. `ffplay` ships with FFmpeg.
-
-Ubuntu/Debian:
+If playback fails with a YouTube extraction error, update `yt-dlp`:
 
 ```bash
-sudo apt install ffmpeg
-python3 -m pip install --user -U yt-dlp
+pipx upgrade yt-dlp
 ```
 
-macOS:
+If playback starts but you hear no sound, verify your system audio works with `ffplay` and that your terminal session has access to your audio server.
+
+## Local Development
 
 ```bash
-brew install ffmpeg
-brew install yt-dlp
+npm install
+npm run build
+npm link
+shellwave ektaara
 ```
 
-Windows:
-
-```powershell
-winget install Gyan.FFmpeg
-winget install yt-dlp.yt-dlp
-```
-
-If playback fails with a `yt-dlp` extraction error, update `yt-dlp`:
+Run checks:
 
 ```bash
-python3 -m pip install --user -U yt-dlp
+npm run typecheck
+npm --cache .npm-cache pack --dry-run
 ```
 
 ## Roadmap
 
-- Official YouTube search picker
 - Local file playback
 - Queue and history
 - Favorites
+- Config file
 - Pluggable playback backends
