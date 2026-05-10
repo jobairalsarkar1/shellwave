@@ -153,9 +153,11 @@ class YouTubePlayer implements Player {
 		this.#offsetSeconds = offsetSeconds;
 
 		let stderr = '';
+		let markPlayerOutput: (() => void) | undefined;
 
 		playerProcess.stderr?.on('data', (chunk: Buffer) => {
 			stderr += chunk.toString();
+			markPlayerOutput?.();
 		});
 
 		playerProcess.once('exit', () => {
@@ -164,7 +166,9 @@ class YouTubePlayer implements Player {
 			}
 		});
 
-		return await waitForPlayerStartup(playerProcess, () => stderr);
+		return await waitForPlayerStartup(playerProcess, () => stderr, (markOutput) => {
+			markPlayerOutput = markOutput;
+		});
 	}
 
 	seekBy(deltaSeconds: number, durationSeconds?: number): boolean {
@@ -246,16 +250,35 @@ function signalProcess(childProcess: ChildProcess | undefined, signal: NodeJS.Si
 	}
 }
 
-async function waitForPlayerStartup(playerProcess: ChildProcess, getStderr: () => string): Promise<string | undefined> {
+async function waitForPlayerStartup(
+	playerProcess: ChildProcess,
+	getStderr: () => string,
+	onReadySignal: (markOutput: () => void) => void
+): Promise<string | undefined> {
 	return await new Promise((resolve) => {
 		const timeout = setTimeout(() => {
 			resolve(undefined);
-		}, 2500);
+		}, 750);
+
+		let settled = false;
+
+		const finish = (message: string | undefined) => {
+			if (settled) {
+				return;
+			}
+
+			settled = true;
+			clearTimeout(timeout);
+			resolve(message);
+		};
+
+		onReadySignal(() => {
+			finish(undefined);
+		});
 
 		playerProcess.once('exit', (code) => {
 			if (code && code !== 0) {
-				clearTimeout(timeout);
-				resolve(formatStartupError('ffplay stopped before audio could start.', getStderr()));
+				finish(formatStartupError('ffplay stopped before audio could start.', getStderr()));
 			}
 		});
 	});

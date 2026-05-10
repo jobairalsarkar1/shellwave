@@ -166,6 +166,16 @@ function InputControls({
 				return;
 			}
 
+			setState({
+				...state,
+				status: 'selected',
+				isPaused: false,
+				session: {
+					state: 'idle',
+					message: `Starting playback: ${track.title}`
+				}
+			});
+
 			void youtubePlayer.play(track).then((session) => {
 				setState({...state, status: 'selected', session, isPaused: false});
 			});
