@@ -2,7 +2,7 @@
 
 A terminal-first audio companion for developers.
 
-`shellwave` starts with YouTube search in the terminal. By default it uses `yt-dlp` for no-key search when available. If you set `YOUTUBE_API_KEY`, it switches to the official YouTube Data API.
+`shellwave` starts with YouTube search in the terminal. By default it uses a bundled no-key YouTube search provider. If you set `YOUTUBE_API_KEY`, it switches to the official YouTube Data API.
 
 The official YouTube Data API returns video metadata, not playable audio streams, so YouTube results are currently shown as discoverable tracks with a clear handoff.
 
@@ -10,12 +10,6 @@ The official YouTube Data API returns video metadata, not playable audio streams
 
 ```bash
 npm install -g shellwave
-```
-
-For no-key YouTube search, install `yt-dlp`:
-
-```bash
-yt-dlp --version
 ```
 
 ## Usage
@@ -32,12 +26,12 @@ shellwave search "lofi coding music"
 
 ## YouTube Search
 
-No API key is required if `yt-dlp` is installed.
+No API key or external binary is required for the default search flow.
 
-To force `yt-dlp`:
+To force the bundled no-key provider:
 
 ```bash
-SHELLWAVE_SEARCH_PROVIDER=yt-dlp shellwave lofi coding music
+SHELLWAVE_SEARCH_PROVIDER=youtubei shellwave lofi coding music
 ```
 
 To use the official YouTube Data API instead, create a YouTube Data API key in Google Cloud, then expose it as:
@@ -56,6 +50,34 @@ To force official API mode:
 
 ```bash
 SHELLWAVE_SEARCH_PROVIDER=youtube-api shellwave lofi coding music
+```
+
+To force `yt-dlp` mode, install `yt-dlp` and run:
+
+```bash
+SHELLWAVE_SEARCH_PROVIDER=yt-dlp shellwave lofi coding music
+```
+
+## Playback
+
+Audio playback uses `ffplay`, which ships with FFmpeg. Install FFmpeg and make sure `ffplay` is on your `PATH`.
+
+Ubuntu/Debian:
+
+```bash
+sudo apt install ffmpeg
+```
+
+macOS:
+
+```bash
+brew install ffmpeg
+```
+
+Windows:
+
+```powershell
+winget install Gyan.FFmpeg
 ```
 
 ## Roadmap

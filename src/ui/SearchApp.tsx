@@ -1,6 +1,6 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {Box, Text, useApp, useInput} from 'ink';
-import {YouTubeOfficialPlayer} from '../player/youtubeOfficialPlayer.js';
+import {youtubePlayer} from '../player/youtubePlayer.js';
 import type {PlaybackSession} from '../player/types.js';
 import type {SearchResult} from '../providers/types.js';
 import {createSearchProvider} from '../providers/createSearchProvider.js';
@@ -91,6 +91,7 @@ function InputControls({
 
 	useInput((input, key) => {
 		if (input === 'q' || key.escape) {
+			youtubePlayer.stop();
 			exit();
 			return;
 		}
@@ -122,7 +123,7 @@ function InputControls({
 				return;
 			}
 
-			void new YouTubeOfficialPlayer().play(track).then((session) => {
+			void youtubePlayer.play(track).then((session) => {
 				setState({...state, status: 'selected', session});
 			});
 		}

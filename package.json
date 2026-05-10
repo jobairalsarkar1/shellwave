@@ -12,7 +12,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc",
+    "clean": "node scripts/clean.mjs",
+    "build": "npm run clean && tsc",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "start": "node dist/cli.js"
@@ -26,13 +27,13 @@
     "ink"
   ],
   "author": "",
-  "homepage": "https://github.com/your-name/shellwave#readme",
+  "homepage": "https://github.com/jobairalsarkar1/shellwave#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-name/shellwave.git"
+    "url": "git+https://github.com/jobairalsarkar1/shellwave.git"
   },
   "bugs": {
-    "url": "https://github.com/your-name/shellwave/issues"
+    "url": "https://github.com/jobairalsarkar1/shellwave/issues"
   },
   "license": "MIT",
   "engines": {
@@ -41,7 +42,8 @@
   "dependencies": {
     "commander": "^12.1.0",
     "ink": "^5.0.1",
-    "react": "^18.3.1"
+    "react": "^18.3.1",
+    "youtubei.js": "^17.0.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
