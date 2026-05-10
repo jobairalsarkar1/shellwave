@@ -3,7 +3,8 @@ import {Box, Text, useApp, useInput} from 'ink';
 import {YouTubeOfficialPlayer} from '../player/youtubeOfficialPlayer.js';
 import type {PlaybackSession} from '../player/types.js';
 import type {SearchResult} from '../providers/types.js';
-import {YouTubeSearchProvider} from '../providers/youtube.js';
+import {createSearchProvider} from '../providers/createSearchProvider.js';
+import type {SearchProvider} from '../providers/types.js';
 import {formatDate} from '../lib/format.js';
 
 type Props = {
@@ -12,15 +13,15 @@ type Props = {
 
 type ScreenState =
 	| {status: 'loading'}
-	| {status: 'ready'; results: SearchResult[]; selectedIndex: number}
-	| {status: 'selected'; results: SearchResult[]; selectedIndex: number; session: PlaybackSession}
+	| {status: 'ready'; results: SearchResult[]; selectedIndex: number; providerName: string}
+	| {status: 'selected'; results: SearchResult[]; selectedIndex: number; session: PlaybackSession; providerName: string}
 	| {status: 'error'; message: string};
 
 export function SearchApp({query}: Props): React.ReactElement {
 	const [state, setState] = useState<ScreenState>({status: 'loading'});
-	const provider = useMemo(() => {
+	const provider = useMemo<SearchProvider | undefined>(() => {
 		try {
-			return new YouTubeSearchProvider();
+			return createSearchProvider();
 		} catch (error) {
 			setState({status: 'error', message: error instanceof Error ? error.message : String(error)});
 			return undefined;
@@ -39,7 +40,7 @@ export function SearchApp({query}: Props): React.ReactElement {
 				const results = await provider.search(query);
 
 				if (!cancelled) {
-					setState({status: 'ready', results, selectedIndex: 0});
+					setState({status: 'ready', results, selectedIndex: 0, providerName: provider.name});
 				}
 			} catch (error) {
 				if (!cancelled) {
@@ -61,9 +62,15 @@ export function SearchApp({query}: Props): React.ReactElement {
 			<Header query={query} />
 			{state.status === 'loading' && <Text color="cyan">Searching YouTube...</Text>}
 			{state.status === 'error' && <ErrorMessage message={state.message} />}
-			{state.status === 'ready' && <Results results={state.results} selectedIndex={state.selectedIndex} />}
+			{state.status === 'ready' && (
+				<>
+					<ProviderBadge name={state.providerName} />
+					<Results results={state.results} selectedIndex={state.selectedIndex} />
+				</>
+			)}
 			{state.status === 'selected' && (
 				<>
+					<ProviderBadge name={state.providerName} />
 					<Results results={state.results} selectedIndex={state.selectedIndex} />
 					<PlayerPanel session={state.session} />
 				</>
@@ -157,6 +164,10 @@ function Results({results, selectedIndex}: {results: SearchResult[]; selectedInd
 	);
 }
 
+function ProviderBadge({name}: {name: string}): React.ReactElement {
+	return <Text dimColor>Search provider: {name}</Text>;
+}
+
 function PlayerPanel({session}: {session: PlaybackSession}): React.ReactElement {
 	return (
 		<Box borderStyle="round" borderColor="yellow" paddingX={1} flexDirection="column">
@@ -171,8 +182,11 @@ function PlayerPanel({session}: {session: PlaybackSession}): React.ReactElement 
 function ErrorMessage({message}: {message: string}): React.ReactElement {
 	return (
 		<Box flexDirection="column">
-			<Text color="red">Error: {message}</Text>
-			<Text dimColor>Set YOUTUBE_API_KEY to use official YouTube search.</Text>
+			{message.split('\n').map((line, index) => (
+				<Text key={`${line}-${index}`} color={index === 0 ? 'red' : undefined}>
+					{index === 0 ? `Error: ${line}` : line}
+				</Text>
+			))}
 		</Box>
 	);
 }

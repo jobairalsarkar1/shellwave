@@ -23,6 +23,7 @@ type YouTubeSearchResponse = {
 };
 
 export class YouTubeSearchProvider implements SearchProvider {
+	readonly name = 'YouTube Data API';
 	readonly #apiKey: string;
 
 	constructor(apiKey = process.env.YOUTUBE_API_KEY) {

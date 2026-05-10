@@ -12,5 +12,6 @@ export type SearchResult = {
 };
 
 export interface SearchProvider {
+	readonly name: string;
 	search(query: string): Promise<SearchResult[]>;
 }
