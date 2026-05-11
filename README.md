@@ -10,6 +10,8 @@ Search from your terminal, pick a result with the keyboard, and play audio witho
 npm install -g shellwave
 ```
 
+If global npm installs fail with a permissions error, see [Install Troubleshooting](#install-troubleshooting).
+
 ## Requirements
 
 Search works out of the box. Playback needs:
@@ -47,10 +49,6 @@ python3 -m pip install --user -U yt-dlp
 ```
 
 If Ubuntu blocks pip with an externally managed environment warning, use the `pipx` method above.
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
 
 macOS:
 
@@ -96,6 +94,49 @@ Space        pause/resume
 s            stop and return to results
 q            quit
 ```
+
+## Install Troubleshooting
+
+### EACCES during global install
+
+If `npm install -g shellwave` fails with an error like:
+
+```text
+EACCES: permission denied, mkdir '/usr/local/lib/node_modules/shellwave'
+```
+
+your npm global install directory is owned by root. Check it with:
+
+```bash
+npm config get prefix
+```
+
+If it prints `/usr/local`, prefer a user-owned npm prefix:
+
+```bash
+mkdir -p ~/.npm-global
+npm config set prefix ~/.npm-global
+```
+
+fish:
+
+```bash
+fish_add_path ~/.npm-global/bin
+```
+
+Bash/Zsh:
+
+```bash
+export PATH="$HOME/.npm-global/bin:$PATH"
+```
+
+Then install again:
+
+```bash
+npm install -g shellwave
+```
+
+For a longer-term Node setup, use a user-owned version manager such as `nvm`, `fnm`, or `volta`.
 
 ## Search Providers
 
