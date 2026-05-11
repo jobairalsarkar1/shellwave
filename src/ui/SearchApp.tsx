@@ -70,6 +70,57 @@ export function SearchApp({query}: Props): React.ReactElement {
 		};
 	}, []);
 
+	useEffect(() => {
+		return youtubePlayer.onEnd(() => {
+			setState((currentState) => {
+				if (currentState.status !== 'selected') {
+					return currentState;
+				}
+
+				const nextIndex = currentState.results.findIndex((result) => result.id === currentState.playingTrack.id) + 1;
+				const nextTrack = currentState.results[nextIndex];
+
+				if (!nextTrack) {
+					return {
+						...currentState,
+						isPaused: false,
+						session: {
+							state: 'stopped',
+							message: 'Playback finished.'
+						}
+					};
+				}
+
+				void youtubePlayer.play(nextTrack).then((session) => {
+					setState((latestState) => {
+						if (latestState.status !== 'selected') {
+							return latestState;
+						}
+
+						return {
+							...latestState,
+							selectedIndex: nextIndex,
+							playingTrack: nextTrack,
+							session,
+							isPaused: false
+						};
+					});
+				});
+
+				return {
+					...currentState,
+					selectedIndex: nextIndex,
+					playingTrack: nextTrack,
+					isPaused: false,
+					session: {
+						state: 'idle',
+						message: `Starting next: ${nextTrack.title}`
+					}
+				};
+			});
+		});
+	}, []);
+
 	return (
 		<Box flexDirection="column" gap={1}>
 			{process.stdin.isTTY && <InputControls state={state} setState={setState} />}

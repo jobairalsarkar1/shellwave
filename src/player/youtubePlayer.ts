@@ -14,6 +14,7 @@ class YouTubePlayer implements Player {
 	#pausedAt?: number;
 	#pausedMs = 0;
 	#offsetSeconds = 0;
+	#onEnd?: () => void;
 
 	async play(track: SearchResult): Promise<PlaybackSession> {
 		this.stop();
@@ -78,6 +79,16 @@ class YouTubePlayer implements Player {
 		this.clearState();
 	}
 
+	onEnd(callback: () => void): () => void {
+		this.#onEnd = callback;
+
+		return () => {
+			if (this.#onEnd === callback) {
+				this.#onEnd = undefined;
+			}
+		};
+	}
+
 	pause(): boolean {
 		if (!this.#process || this.#pausedAt) {
 			return false;
@@ -125,7 +136,7 @@ class YouTubePlayer implements Player {
 		return this.#offsetSeconds + elapsedSinceStart;
 	}
 
-	async startPlayerAt(offsetSeconds: number): Promise<string | undefined> {
+	async startPlayerAt(offsetSeconds: number, reason: 'play' | 'seek' = 'play'): Promise<string | undefined> {
 		if (!this.#streamUrl) {
 			return 'Playback failed: audio URL was not resolved.';
 		}
@@ -163,6 +174,7 @@ class YouTubePlayer implements Player {
 		playerProcess.once('exit', () => {
 			if (this.#process === playerProcess) {
 				this.clearState({keepStreamUrl: true});
+				this.notifyEnded();
 			}
 		});
 
@@ -177,7 +189,7 @@ class YouTubePlayer implements Player {
 		}
 
 		const targetSeconds = clamp(this.getElapsedSeconds() + deltaSeconds, 0, durationSeconds);
-		void this.startPlayerAt(targetSeconds);
+		void this.startPlayerAt(targetSeconds, 'seek');
 		return true;
 	}
 
@@ -191,6 +203,10 @@ class YouTubePlayer implements Player {
 		if (!keepStreamUrl) {
 			this.#streamUrl = undefined;
 		}
+	}
+
+	notifyEnded(): void {
+		this.#onEnd?.();
 	}
 }
 

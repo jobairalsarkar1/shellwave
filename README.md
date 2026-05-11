@@ -100,6 +100,8 @@ s            stop and return to results
 q            quit
 ```
 
+When a track ends, shellwave automatically starts the next result from the current search list.
+
 ## Install Troubleshooting
 
 ### EACCES during global install
