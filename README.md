@@ -66,8 +66,7 @@ winget install yt-dlp.yt-dlp
 Check your setup:
 
 ```bash
-ffplay -version
-yt-dlp --version
+shellwave doctor
 ```
 
 ## Usage
@@ -82,6 +81,12 @@ or:
 
 ```bash
 shellwave search "lofi coding music"
+```
+
+Check playback dependencies:
+
+```bash
+shellwave doctor
 ```
 
 Controls:
