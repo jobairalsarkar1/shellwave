@@ -1,6 +1,6 @@
 {
   "name": "shellwave",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "A terminal-first audio companion for developers.",
   "type": "module",
   "bin": {
