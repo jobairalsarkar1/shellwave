@@ -2,10 +2,12 @@
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {Command} from 'commander';
+import updateNotifier from 'update-notifier';
 import {runDoctorCommand} from './commands/doctor.js';
 import {runSearchCommand} from './commands/search.js';
 
-const packageJson = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')) as {version: string};
+const packageJson = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')) as {name: string; version: string};
+updateNotifier({pkg: packageJson}).notify();
 const program = new Command();
 
 program
