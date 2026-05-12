@@ -71,10 +71,25 @@ export function SearchApp({query}: Props): React.ReactElement {
 	}, []);
 
 	useEffect(() => {
-		return youtubePlayer.onEnd(() => {
+		return youtubePlayer.onEnd((event) => {
 			setState((currentState) => {
 				if (currentState.status !== 'selected') {
 					return currentState;
+				}
+
+				if (!event.completed) {
+					return {
+						...currentState,
+						isPaused: false,
+						session: {
+							state: 'stopped',
+							message: [
+								'Playback stopped before the track finished.',
+								`Stopped at ${formatDuration(event.elapsedSeconds)} of ${formatDuration(currentState.playingTrack.durationSeconds ?? 0)}.`,
+								'Press Enter on a result to play again.'
+							].join('\n')
+						}
+					};
 				}
 
 				const nextIndex = currentState.results.findIndex((result) => result.id === currentState.playingTrack.id) + 1;

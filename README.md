@@ -100,7 +100,7 @@ s            stop and return to results
 q            quit
 ```
 
-When a track ends, shellwave automatically starts the next result from the current search list.
+When a track completes, shellwave automatically starts the next result from the current search list. If playback stops early, shellwave keeps the current result selected instead of skipping ahead.
 
 ## Install Troubleshooting
 

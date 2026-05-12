@@ -6,6 +6,14 @@ import type {PlaybackSession, Player} from './types.js';
 
 const execFileAsync = promisify(execFile);
 const SEEK_STEP_SECONDS = 10;
+const COMPLETION_GRACE_SECONDS = 8;
+const MAX_RESTART_ATTEMPTS = 1;
+const RESTART_DELAY_MS = 500;
+
+export type PlaybackEndEvent = {
+	elapsedSeconds: number;
+	completed: boolean;
+};
 
 class YouTubePlayer implements Player {
 	#process?: ChildProcess;
@@ -14,7 +22,10 @@ class YouTubePlayer implements Player {
 	#pausedAt?: number;
 	#pausedMs = 0;
 	#offsetSeconds = 0;
-	#onEnd?: () => void;
+	#durationSeconds?: number;
+	#currentTrack?: SearchResult;
+	#restartAttempts = 0;
+	#onEnd?: (event: PlaybackEndEvent) => void;
 
 	async play(track: SearchResult): Promise<PlaybackSession> {
 		this.stop();
@@ -44,7 +55,10 @@ class YouTubePlayer implements Player {
 		}
 
 		try {
+			this.#currentTrack = track;
+			this.#restartAttempts = 0;
 			this.#streamUrl = await resolveAudioUrl(track.url);
+			this.#durationSeconds = track.durationSeconds;
 			const startupError = await this.startPlayerAt(0);
 
 			if (startupError) {
@@ -79,7 +93,7 @@ class YouTubePlayer implements Player {
 		this.clearState();
 	}
 
-	onEnd(callback: () => void): () => void {
+	onEnd(callback: (event: PlaybackEndEvent) => void): () => void {
 		this.#onEnd = callback;
 
 		return () => {
@@ -172,10 +186,24 @@ class YouTubePlayer implements Player {
 		});
 
 		playerProcess.once('exit', () => {
-			if (this.#process === playerProcess) {
-				this.clearState({keepStreamUrl: true});
-				this.notifyEnded();
+			if (this.#process !== playerProcess) {
+				return;
 			}
+
+			const endEvent = this.createEndEvent();
+
+			if (this.shouldAttemptResume(endEvent)) {
+				this.#restartAttempts += 1;
+				const offsetSeconds = endEvent.elapsedSeconds;
+				this.clearState({keepStreamUrl: true});
+				setTimeout(() => {
+					void this.startPlayerAt(offsetSeconds, 'seek');
+				}, RESTART_DELAY_MS);
+				return;
+			}
+
+			this.clearState({keepStreamUrl: true});
+			this.notifyEnded(endEvent);
 		});
 
 		return await waitForPlayerStartup(playerProcess, () => stderr, (markOutput) => {
@@ -202,11 +230,43 @@ class YouTubePlayer implements Player {
 
 		if (!keepStreamUrl) {
 			this.#streamUrl = undefined;
+			this.#durationSeconds = undefined;
+			this.#currentTrack = undefined;
+			this.#restartAttempts = 0;
 		}
 	}
 
-	notifyEnded(): void {
-		this.#onEnd?.();
+	createEndEvent(): PlaybackEndEvent {
+		const elapsedSeconds = this.getElapsedSeconds();
+
+		return {
+			elapsedSeconds,
+			completed: isComplete(elapsedSeconds, this.#durationSeconds)
+		};
+	}
+
+	shouldAttemptResume(event: PlaybackEndEvent): boolean {
+		if (event.completed) {
+			return false;
+		}
+
+		if (!this.#streamUrl || this.#durationSeconds === undefined || !this.#currentTrack) {
+			return false;
+		}
+
+		if (this.#restartAttempts >= MAX_RESTART_ATTEMPTS) {
+			return false;
+		}
+
+		if (event.elapsedSeconds < 5) {
+			return false;
+		}
+
+		return event.elapsedSeconds < Math.max(0, this.#durationSeconds - 1);
+	}
+
+	notifyEnded(event: PlaybackEndEvent): void {
+		this.#onEnd?.(event);
 	}
 }
 
@@ -317,6 +377,14 @@ function clamp(value: number, minimum: number, maximum?: number): number {
 	}
 
 	return Math.min(maximum, Math.max(minimum, value));
+}
+
+function isComplete(elapsedSeconds: number, durationSeconds: number | undefined): boolean {
+	if (!durationSeconds) {
+		return true;
+	}
+
+	return elapsedSeconds >= Math.max(0, durationSeconds - COMPLETION_GRACE_SECONDS);
 }
 
 export const youtubePlayer = new YouTubePlayer();
