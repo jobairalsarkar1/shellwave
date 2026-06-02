@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {Box, Text, useApp, useInput} from 'ink';
 import {youtubePlayer} from '../player/youtubePlayer.js';
 import type {PlaybackSession} from '../player/types.js';
@@ -10,6 +10,8 @@ import {formatDate} from '../lib/format.js';
 type Props = {
 	query: string;
 };
+
+const AUTO_NEXT_DELAY_MS = 1500;
 
 type ScreenState =
 	| {status: 'loading'}
@@ -27,6 +29,7 @@ type ScreenState =
 
 export function SearchApp({query}: Props): React.ReactElement {
 	const [state, setState] = useState<ScreenState>({status: 'loading'});
+	const autoNextTimeout = useRef<ReturnType<typeof setTimeout>>();
 	const provider = useMemo<SearchProvider | undefined>(() => {
 		try {
 			return createSearchProvider();
@@ -66,12 +69,16 @@ export function SearchApp({query}: Props): React.ReactElement {
 
 	useEffect(() => {
 		return () => {
+			if (autoNextTimeout.current) {
+				clearTimeout(autoNextTimeout.current);
+			}
+
 			youtubePlayer.stop();
 		};
 	}, []);
 
 	useEffect(() => {
-		return youtubePlayer.onEnd((event) => {
+		const unsubscribe = youtubePlayer.onEnd((event) => {
 			setState((currentState) => {
 				if (currentState.status !== 'selected') {
 					return currentState;
@@ -106,21 +113,28 @@ export function SearchApp({query}: Props): React.ReactElement {
 					};
 				}
 
-				void youtubePlayer.play(nextTrack).then((session) => {
-					setState((latestState) => {
-						if (latestState.status !== 'selected') {
-							return latestState;
-						}
+				if (autoNextTimeout.current) {
+					clearTimeout(autoNextTimeout.current);
+				}
 
-						return {
-							...latestState,
-							selectedIndex: nextIndex,
-							playingTrack: nextTrack,
-							session,
-							isPaused: false
-						};
+				autoNextTimeout.current = setTimeout(() => {
+					autoNextTimeout.current = undefined;
+					void youtubePlayer.play(nextTrack).then((session) => {
+						setState((latestState) => {
+							if (latestState.status !== 'selected' || latestState.playingTrack.id !== nextTrack.id) {
+								return latestState;
+							}
+
+							return {
+								...latestState,
+								selectedIndex: nextIndex,
+								playingTrack: nextTrack,
+								session,
+								isPaused: false
+							};
+						});
 					});
-				});
+				}, AUTO_NEXT_DELAY_MS);
 
 				return {
 					...currentState,
@@ -129,11 +143,20 @@ export function SearchApp({query}: Props): React.ReactElement {
 					isPaused: false,
 					session: {
 						state: 'idle',
-						message: `Starting next: ${nextTrack.title}`
+						message: `Starting next in ${formatDelay(AUTO_NEXT_DELAY_MS)}: ${nextTrack.title}`
 					}
 				};
 			});
 		});
+
+		return () => {
+			if (autoNextTimeout.current) {
+				clearTimeout(autoNextTimeout.current);
+				autoNextTimeout.current = undefined;
+			}
+
+			unsubscribe();
+		};
 	}, []);
 
 	return (
@@ -373,6 +396,10 @@ function formatDuration(seconds: number): string {
 	const minutes = Math.floor(seconds / 60);
 	const remainingSeconds = Math.floor(seconds % 60);
 	return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+function formatDelay(milliseconds: number): string {
+	return `${(milliseconds / 1000).toFixed(1)}s`;
 }
 
 function capitalize(value: string): string {
