@@ -6,8 +6,8 @@ import type {PlaybackSession, Player} from './types.js';
 
 const execFileAsync = promisify(execFile);
 const SEEK_STEP_SECONDS = 10;
-const COMPLETION_GRACE_SECONDS = 8;
-const MAX_RESTART_ATTEMPTS = 1;
+const COMPLETION_GRACE_SECONDS = 2;
+const MAX_RESTART_ATTEMPTS = 3;
 const RESTART_DELAY_MS = 500;
 
 export type PlaybackEndEvent = {
@@ -30,13 +30,15 @@ class YouTubePlayer implements Player {
 	async play(track: SearchResult): Promise<PlaybackSession> {
 		this.stop();
 
-		if (!hasCommand('ffplay')) {
+		const backend = findPlaybackBackend();
+
+		if (!backend) {
 			return {
 				state: 'unavailable',
 				message: [
 					`Selected: ${track.title}`,
-					'Audio playback needs ffplay on your PATH.',
-					'Install FFmpeg, then run shellwave again.',
+					'Audio playback needs mpv or ffplay on your PATH.',
+					'Install mpv or FFmpeg, then run shellwave again.',
 					`Open URL: ${track.url}`
 				].join('\n')
 			};
@@ -59,7 +61,7 @@ class YouTubePlayer implements Player {
 			this.#restartAttempts = 0;
 			this.#streamUrl = await resolveAudioUrl(track.url);
 			this.#durationSeconds = track.durationSeconds;
-			const startupError = await this.startPlayerAt(0);
+			const startupError = await this.startPlayerAt(0, backend);
 
 			if (startupError) {
 				this.stop();
@@ -72,7 +74,7 @@ class YouTubePlayer implements Player {
 
 			return {
 				state: 'playing',
-				message: [`Now playing: ${track.title}`, 'Audio stream started.', 'Press q to quit shellwave and stop playback.'].join('\n')
+				message: [`Now playing: ${track.title}`, `Audio stream started with ${backend.command}.`, 'Press q to quit shellwave and stop playback.'].join('\n')
 			};
 		} catch (error) {
 			this.stop();
@@ -150,22 +152,20 @@ class YouTubePlayer implements Player {
 		return this.#offsetSeconds + elapsedSinceStart;
 	}
 
-	async startPlayerAt(offsetSeconds: number, reason: 'play' | 'seek' = 'play'): Promise<string | undefined> {
+	async startPlayerAt(offsetSeconds: number, backend = findPlaybackBackend()): Promise<string | undefined> {
 		if (!this.#streamUrl) {
 			return 'Playback failed: audio URL was not resolved.';
 		}
 
-		killProcess(this.#process);
-
-		const args = ['-nodisp', '-autoexit', '-loglevel', 'warning'];
-
-		if (offsetSeconds > 0) {
-			args.push('-ss', String(offsetSeconds));
+		if (!backend) {
+			return 'Playback failed: mpv or ffplay was not found on PATH.';
 		}
 
-		args.push('-i', this.#streamUrl);
+		killProcess(this.#process);
 
-		const playerProcess = spawn('ffplay', args, {
+		const args = buildPlaybackArgs(backend, this.#streamUrl, offsetSeconds);
+
+		const playerProcess = spawn(backend.command, args, {
 			detached: process.platform !== 'win32',
 			stdio: ['ignore', 'ignore', 'pipe'],
 			windowsHide: true
@@ -185,19 +185,19 @@ class YouTubePlayer implements Player {
 			markPlayerOutput?.();
 		});
 
-		playerProcess.once('exit', () => {
+		playerProcess.once('exit', (code, signal) => {
 			if (this.#process !== playerProcess) {
 				return;
 			}
 
-			const endEvent = this.createEndEvent();
+			const endEvent = this.createEndEvent({naturalExit: code === 0 && !signal});
 
 			if (this.shouldAttemptResume(endEvent)) {
 				this.#restartAttempts += 1;
 				const offsetSeconds = endEvent.elapsedSeconds;
 				this.clearState({keepStreamUrl: true});
 				setTimeout(() => {
-					void this.startPlayerAt(offsetSeconds, 'seek');
+					void this.startPlayerAt(offsetSeconds, backend);
 				}, RESTART_DELAY_MS);
 				return;
 			}
@@ -217,7 +217,7 @@ class YouTubePlayer implements Player {
 		}
 
 		const targetSeconds = clamp(this.getElapsedSeconds() + deltaSeconds, 0, durationSeconds);
-		void this.startPlayerAt(targetSeconds, 'seek');
+		void this.startPlayerAt(targetSeconds);
 		return true;
 	}
 
@@ -236,12 +236,12 @@ class YouTubePlayer implements Player {
 		}
 	}
 
-	createEndEvent(): PlaybackEndEvent {
+	createEndEvent({naturalExit}: {naturalExit: boolean}): PlaybackEndEvent {
 		const elapsedSeconds = this.getElapsedSeconds();
 
 		return {
 			elapsedSeconds,
-			completed: isComplete(elapsedSeconds, this.#durationSeconds)
+			completed: isComplete(elapsedSeconds, this.#durationSeconds, naturalExit)
 		};
 	}
 
@@ -289,12 +289,51 @@ async function resolveAudioUrl(url: string): Promise<string> {
 }
 
 function hasCommand(command: string): boolean {
-	const result = spawnSync(command, ['-version'], {
+	const args = command === 'ffplay' ? ['-version'] : ['--version'];
+	const result = spawnSync(command, args, {
 		stdio: 'ignore',
 		windowsHide: true
 	});
 
 	return !result.error;
+}
+
+type PlaybackBackend = {
+	command: 'mpv' | 'ffplay';
+};
+
+function findPlaybackBackend(): PlaybackBackend | undefined {
+	if (hasCommand('mpv')) {
+		return {command: 'mpv'};
+	}
+
+	if (hasCommand('ffplay')) {
+		return {command: 'ffplay'};
+	}
+
+	return undefined;
+}
+
+function buildPlaybackArgs(backend: PlaybackBackend, streamUrl: string, offsetSeconds: number): string[] {
+	if (backend.command === 'mpv') {
+		const args = ['--no-video', '--really-quiet', '--force-window=no'];
+
+		if (offsetSeconds > 0) {
+			args.push(`--start=${offsetSeconds}`);
+		}
+
+		args.push(streamUrl);
+		return args;
+	}
+
+	const args = ['-nodisp', '-autoexit', '-loglevel', 'warning'];
+
+	if (offsetSeconds > 0) {
+		args.push('-ss', String(offsetSeconds));
+	}
+
+	args.push('-i', streamUrl);
+	return args;
 }
 
 function killProcess(childProcess: ChildProcess | undefined): void {
@@ -379,9 +418,9 @@ function clamp(value: number, minimum: number, maximum?: number): number {
 	return Math.min(maximum, Math.max(minimum, value));
 }
 
-function isComplete(elapsedSeconds: number, durationSeconds: number | undefined): boolean {
+function isComplete(elapsedSeconds: number, durationSeconds: number | undefined, naturalExit: boolean): boolean {
 	if (!durationSeconds) {
-		return true;
+		return naturalExit;
 	}
 
 	return elapsedSeconds >= Math.max(0, durationSeconds - COMPLETION_GRACE_SECONDS);

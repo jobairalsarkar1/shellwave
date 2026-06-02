@@ -13,7 +13,7 @@ type Check = {
 };
 
 export async function runDoctorCommand(): Promise<void> {
-	const checks = await Promise.all([checkNode(), checkNpmPrefix(), checkCommand('ffplay', ['-version']), checkCommand('yt-dlp', ['--version'])]);
+	const checks = await Promise.all([checkNode(), checkNpmPrefix(), checkPlaybackBackend(), checkCommand('yt-dlp', ['--version'])]);
 	const hasFailures = checks.some((check) => check.status === 'fail');
 
 	console.log('shellwave doctor\n');
@@ -26,7 +26,7 @@ export async function runDoctorCommand(): Promise<void> {
 		}
 	}
 
-	console.log('\nPlayback needs both ffplay and yt-dlp.');
+	console.log('\nPlayback needs yt-dlp and either mpv or ffplay. mpv is preferred when available.');
 
 	if (hasFailures) {
 		console.log('\nSuggested setup:');
@@ -106,16 +106,43 @@ async function checkCommand(command: string, args: string[]): Promise<Check> {
 	}
 }
 
+async function checkPlaybackBackend(): Promise<Check> {
+	const [mpv, ffplay] = await Promise.all([checkCommand('mpv', ['--version']), checkCommand('ffplay', ['-version'])]);
+
+	if (mpv.status === 'pass') {
+		return {
+			name: 'playback backend',
+			status: 'pass',
+			message: `mpv available (${mpv.message})`
+		};
+	}
+
+	if (ffplay.status === 'pass') {
+		return {
+			name: 'playback backend',
+			status: 'pass',
+			message: `ffplay available (${ffplay.message})`,
+			details: ['mpv was not found; shellwave will use ffplay as a fallback.']
+		};
+	}
+
+	return {
+		name: 'playback backend',
+		status: 'fail',
+		message: 'Neither mpv nor ffplay was found on PATH.'
+	};
+}
+
 function setupInstructions(): string[] {
 	if (process.platform === 'darwin') {
-		return ['brew install ffmpeg yt-dlp'];
+		return ['brew install mpv yt-dlp', '# or: brew install ffmpeg yt-dlp'];
 	}
 
 	if (process.platform === 'win32') {
-		return ['winget install Gyan.FFmpeg', 'winget install yt-dlp.yt-dlp'];
+		return ['winget install Gyan.FFmpeg', 'winget install yt-dlp.yt-dlp', '# install mpv too if it is available through your package manager'];
 	}
 
-	return ['sudo apt install ffmpeg', 'sudo apt install pipx', 'pipx install yt-dlp', 'fish_add_path ~/.local/bin   # fish', 'export PATH="$HOME/.local/bin:$PATH"   # bash/zsh'];
+	return ['sudo apt install mpv', '# or: sudo apt install ffmpeg', 'sudo apt install pipx', 'pipx install yt-dlp', 'fish_add_path ~/.local/bin   # fish', 'export PATH="$HOME/.local/bin:$PATH"   # bash/zsh'];
 }
 
 function icon(status: CheckStatus): string {

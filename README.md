@@ -16,16 +16,18 @@ If global npm installs fail with a permissions error, see [Install Troubleshooti
 
 Search works out of the box. Playback needs:
 
-- `ffplay`, included with FFmpeg
+- `mpv` or `ffplay`, included with FFmpeg. `mpv` is preferred when available.
 - `yt-dlp`, used to resolve YouTube audio URLs
 
 Ubuntu/Debian:
 
 ```bash
-sudo apt install ffmpeg
+sudo apt install mpv
 sudo apt install pipx
 pipx install yt-dlp
 ```
+
+If you prefer FFmpeg tools, `sudo apt install ffmpeg` also works.
 
 If your shell cannot find `yt-dlp`, add `~/.local/bin` to your path.
 
@@ -53,7 +55,7 @@ If Ubuntu blocks pip with an externally managed environment warning, use the `pi
 macOS:
 
 ```bash
-brew install ffmpeg yt-dlp
+brew install mpv yt-dlp
 ```
 
 Windows:
@@ -62,6 +64,8 @@ Windows:
 winget install Gyan.FFmpeg
 winget install yt-dlp.yt-dlp
 ```
+
+If `mpv` is available through your package manager, install it for the preferred playback backend.
 
 Check your setup:
 
@@ -184,7 +188,7 @@ If playback fails with a YouTube extraction error, update `yt-dlp`:
 pipx upgrade yt-dlp
 ```
 
-If playback starts but you hear no sound, verify your system audio works with `ffplay` and that your terminal session has access to your audio server.
+If playback starts but you hear no sound, verify your system audio works with `mpv` or `ffplay` and that your terminal session has access to your audio server.
 
 ## Local Development
 
