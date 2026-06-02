@@ -6,9 +6,13 @@ import type {SearchResult} from '../providers/types.js';
 import {createSearchProvider} from '../providers/createSearchProvider.js';
 import type {SearchProvider} from '../providers/types.js';
 import {formatDate} from '../lib/format.js';
+import {addTrackToPlaylist, DEFAULT_PLAYLIST_NAME} from '../playlists/store.js';
 
 type Props = {
 	query: string;
+	initialResults?: SearchResult[];
+	providerName?: string;
+	autoPlay?: boolean;
 };
 
 const AUTO_NEXT_DELAY_MS = 1500;
@@ -27,19 +31,31 @@ type ScreenState =
 	  }
 	| {status: 'error'; message: string};
 
-export function SearchApp({query}: Props): React.ReactElement {
-	const [state, setState] = useState<ScreenState>({status: 'loading'});
+export function SearchApp({query, initialResults, providerName, autoPlay = false}: Props): React.ReactElement {
+	const [state, setState] = useState<ScreenState>(() =>
+		initialResults ? {status: 'ready', results: initialResults, selectedIndex: 0, providerName: providerName ?? 'playlist'} : {status: 'loading'}
+	);
+	const [notice, setNotice] = useState<string>();
 	const autoNextTimeout = useRef<ReturnType<typeof setTimeout>>();
+	const didAutoPlay = useRef(false);
 	const provider = useMemo<SearchProvider | undefined>(() => {
+		if (initialResults) {
+			return undefined;
+		}
+
 		try {
 			return createSearchProvider();
 		} catch (error) {
 			setState({status: 'error', message: error instanceof Error ? error.message : String(error)});
 			return undefined;
 		}
-	}, []);
+	}, [initialResults]);
 
 	useEffect(() => {
+		if (initialResults) {
+			return;
+		}
+
 		let cancelled = false;
 
 		async function search(): Promise<void> {
@@ -66,6 +82,40 @@ export function SearchApp({query}: Props): React.ReactElement {
 			cancelled = true;
 		};
 	}, [provider, query]);
+
+	useEffect(() => {
+		if (!autoPlay || didAutoPlay.current || state.status !== 'ready') {
+			return;
+		}
+
+		const track = state.results[state.selectedIndex];
+
+		if (!track) {
+			return;
+		}
+
+		didAutoPlay.current = true;
+		setState({
+			...state,
+			status: 'selected',
+			playingTrack: track,
+			isPaused: false,
+			session: {
+				state: 'idle',
+				message: `Starting playback: ${track.title}`
+			}
+		});
+
+		void youtubePlayer.play(track).then((session) => {
+			setState((latestState) => {
+				if (latestState.status !== 'selected' || latestState.playingTrack.id !== track.id) {
+					return latestState;
+				}
+
+				return {...latestState, session, isPaused: false};
+			});
+		});
+	}, [autoPlay, state]);
 
 	useEffect(() => {
 		return () => {
@@ -161,8 +211,9 @@ export function SearchApp({query}: Props): React.ReactElement {
 
 	return (
 		<Box flexDirection="column" gap={1}>
-			{process.stdin.isTTY && <InputControls state={state} setState={setState} />}
+			{process.stdin.isTTY && <InputControls state={state} setState={setState} setNotice={setNotice} />}
 			<Header query={query} />
+			{notice && <Text color="green">{notice}</Text>}
 			{state.status === 'loading' && <Text color="cyan">Searching YouTube...</Text>}
 			{state.status === 'error' && <ErrorMessage message={state.message} />}
 			{state.status === 'ready' && (
@@ -185,10 +236,12 @@ export function SearchApp({query}: Props): React.ReactElement {
 
 function InputControls({
 	state,
-	setState
+	setState,
+	setNotice
 }: {
 	state: ScreenState;
 	setState: React.Dispatch<React.SetStateAction<ScreenState>>;
+	setNotice: React.Dispatch<React.SetStateAction<string | undefined>>;
 }): null {
 	const {exit} = useApp();
 
@@ -200,6 +253,23 @@ function InputControls({
 		}
 
 		if (state.status !== 'ready' && state.status !== 'selected') {
+			return;
+		}
+
+		if (input === 'a') {
+			const track = state.results[state.selectedIndex];
+
+			if (!track) {
+				return;
+			}
+
+			try {
+				const result = addTrackToPlaylist(DEFAULT_PLAYLIST_NAME, track);
+				setNotice(result.added ? `Added to ${DEFAULT_PLAYLIST_NAME}: ${track.title}` : `Already in ${DEFAULT_PLAYLIST_NAME}: ${track.title}`);
+			} catch (error) {
+				setNotice(error instanceof Error ? error.message : 'Could not add track to playlist.');
+			}
+
 			return;
 		}
 
@@ -382,7 +452,7 @@ function ErrorMessage({message}: {message: string}): React.ReactElement {
 }
 
 function Footer(): React.ReactElement {
-	return <Text dimColor>Up/down choose · Enter play · Left/right seek · Space pause/resume · s stop · q quit</Text>;
+	return <Text dimColor>Up/down choose · Enter play · a add to favorites · Left/right seek · Space pause/resume · s stop · q quit</Text>;
 }
 
 function renderProgress(progress: number, hasDuration: boolean): string {

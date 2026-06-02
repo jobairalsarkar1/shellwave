@@ -98,6 +98,7 @@ Controls:
 ```text
 Up/down      choose a search result
 Enter        play selected result
+a            add selected result to favorites
 Left/right   seek backward/forward
 Space        pause/resume
 s            stop and return to results
@@ -105,6 +106,34 @@ q            quit
 ```
 
 When a track completes, shellwave automatically starts the next result from the current search list. If playback stops early, shellwave keeps the current result selected instead of skipping ahead.
+
+## Playlists
+
+Save the selected search result to your `favorites` playlist:
+
+```text
+a
+```
+
+Manage playlists from the command line:
+
+```bash
+shellwave playlist list
+shellwave playlist create favorites
+shellwave playlist show favorites
+shellwave playlist add favorites "https://www.youtube.com/watch?v=VIDEO_ID"
+shellwave playlist play favorites
+shellwave playlist remove favorites 1
+shellwave playlist delete favorites
+```
+
+Shortcut:
+
+```bash
+shellwave pl play favorites
+```
+
+Playlists are stored locally at `~/.config/shellwave/playlists.json` on Linux, or under your `XDG_CONFIG_HOME` if it is set.
 
 ## Install Troubleshooting
 
