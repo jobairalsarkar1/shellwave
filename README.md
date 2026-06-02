@@ -234,11 +234,3 @@ Run checks:
 npm run typecheck
 npm --cache .npm-cache pack --dry-run
 ```
-
-## Roadmap
-
-- Local file playback
-- Queue and history
-- Favorites
-- Config file
-- Pluggable playback backends
