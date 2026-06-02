@@ -16,7 +16,11 @@ import {
 import {runSearchCommand} from './commands/search.js';
 
 const packageJson = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')) as {name: string; version: string};
-updateNotifier({pkg: packageJson}).notify();
+
+if (shouldCheckForUpdates(process.argv.slice(2))) {
+	updateNotifier({pkg: packageJson}).notify();
+}
+
 const program = new Command();
 
 program
@@ -24,6 +28,28 @@ program
 	.description('A terminal-first audio companion for developers.')
 	.version(packageJson.version)
 	.argument('[query...]', 'Search YouTube')
+	.addHelpText(
+		'after',
+		`
+
+Examples:
+  $ shellwave lofi coding music
+  $ shellwave search "ektaara"
+  $ shellwave doctor
+  $ shellwave playlist list
+  $ shellwave playlist play favorites
+  $ shellwave playlist add favorites "https://www.youtube.com/watch?v=VIDEO_ID"
+
+Player controls:
+  Up/down      choose a result
+  Enter        play selected result
+  a            add selected result to favorites
+  Left/right   seek backward/forward
+  Space        pause/resume
+  s            stop playback
+  q            quit
+`
+	)
 	.action(async (query: string[]) => {
 		if (query.length === 0) {
 			program.help();
@@ -48,7 +74,24 @@ program
 		await runDoctorCommand();
 	});
 
-const playlistCommand = program.command('playlist').alias('pl').description('Manage local playlists');
+const playlistCommand = program
+	.command('playlist')
+	.alias('pl')
+	.description('Manage local playlists')
+	.addHelpText(
+		'after',
+		`
+
+Examples:
+  $ shellwave playlist list
+  $ shellwave playlist create favorites
+  $ shellwave playlist show favorites
+  $ shellwave playlist add favorites "https://www.youtube.com/watch?v=VIDEO_ID"
+  $ shellwave playlist play favorites
+  $ shellwave playlist remove favorites 1
+  $ shellwave playlist delete favorites
+`
+	);
 
 playlistCommand
 	.command('list')
@@ -108,3 +151,7 @@ playlistCommand
 	});
 
 await program.parseAsync(process.argv);
+
+function shouldCheckForUpdates(args: string[]): boolean {
+	return !args.some((arg) => arg === '--help' || arg === '-h' || arg === '--version' || arg === '-V');
+}
