@@ -43,7 +43,7 @@ Examples:
 Player controls:
   Up/down      choose a result
   Enter        play selected result
-  a            add selected result to favorites
+  a            add selected result to a playlist
   Left/right   seek backward/forward
   Space        pause/resume
   s            stop playback

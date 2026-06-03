@@ -6,7 +6,7 @@ import type {SearchResult} from '../providers/types.js';
 import {createSearchProvider} from '../providers/createSearchProvider.js';
 import type {SearchProvider} from '../providers/types.js';
 import {formatDate} from '../lib/format.js';
-import {addTrackToPlaylist, DEFAULT_PLAYLIST_NAME} from '../playlists/store.js';
+import {addTrackToPlaylist, createPlaylist, listPlaylistNames} from '../playlists/store.js';
 
 type Props = {
 	query: string;
@@ -29,7 +29,32 @@ type ScreenState =
 			providerName: string;
 			isPaused: boolean;
 	  }
-	| {status: 'error'; message: string};
+	| {status: 'error'; message: string}
+	| {
+			status: 'selecting-playlist';
+			results: SearchResult[];
+			selectedIndex: number;
+			selectedTrackIndex: number;
+			playlistNames: string[];
+			playlistIndex: number;
+			previousStatus: 'ready' | 'selected';
+			playingTrack?: SearchResult;
+			session?: PlaybackSession;
+			providerName: string;
+			isPaused?: boolean;
+	  }
+	| {
+			status: 'creating-playlist';
+			results: SearchResult[];
+			selectedIndex: number;
+			selectedTrackIndex: number;
+			playlistName: string;
+			previousStatus: 'ready' | 'selected';
+			playingTrack?: SearchResult;
+			session?: PlaybackSession;
+			providerName: string;
+			isPaused?: boolean;
+	  };
 
 export function SearchApp({query, initialResults, providerName, autoPlay = false}: Props): React.ReactElement {
 	const [state, setState] = useState<ScreenState>(() =>
@@ -229,6 +254,22 @@ export function SearchApp({query, initialResults, providerName, autoPlay = false
 					<PlayerPanel session={state.session} track={state.playingTrack} isPaused={state.isPaused} />
 				</>
 			)}
+			{state.status === 'selecting-playlist' && (
+				<>
+					<ProviderBadge name={state.providerName} />
+					<Results results={state.results} selectedIndex={state.selectedIndex} />
+					<PlaylistSelector playlists={state.playlistNames} selectedIndex={state.playlistIndex} />
+					{state.previousStatus === 'selected' && <PlayerPanel session={state.session!} track={state.playingTrack!} isPaused={state.isPaused ?? false} />}
+				</>
+			)}
+			{state.status === 'creating-playlist' && (
+				<>
+					<ProviderBadge name={state.providerName} />
+					<Results results={state.results} selectedIndex={state.selectedIndex} />
+					<PlaylistNameInput value={state.playlistName} />
+					{state.previousStatus === 'selected' && <PlayerPanel session={state.session!} track={state.playingTrack!} isPaused={state.isPaused ?? false} />}
+				</>
+			)}
 			<Footer />
 		</Box>
 	);
@@ -247,8 +288,138 @@ function InputControls({
 
 	useInput((input, key) => {
 		if (input === 'q' || key.escape) {
+			if (state.status === 'selecting-playlist' || state.status === 'creating-playlist') {
+				if (state.previousStatus === 'ready') {
+					setState({
+						status: 'ready',
+						results: state.results,
+						selectedIndex: state.selectedIndex,
+						providerName: state.providerName
+					});
+				} else {
+					setState({
+						status: 'selected',
+						results: state.results,
+						selectedIndex: state.selectedIndex,
+						playingTrack: state.playingTrack!,
+						session: state.session!,
+						isPaused: state.isPaused!,
+						providerName: state.providerName
+					});
+				}
+				return;
+			}
+
 			youtubePlayer.stop();
 			exit();
+			return;
+		}
+
+		if (state.status === 'selecting-playlist') {
+			if (key.upArrow) {
+				setState({
+					...state,
+					playlistIndex: Math.max(0, state.playlistIndex - 1)
+				});
+				return;
+			}
+
+			if (key.downArrow) {
+				setState({
+					...state,
+					playlistIndex: Math.min(state.playlistNames.length - 1, state.playlistIndex + 1)
+				});
+				return;
+			}
+
+			if (key.return) {
+				const selectedPlaylist = state.playlistNames[state.playlistIndex];
+				const track = state.results[state.selectedTrackIndex];
+
+				if (selectedPlaylist && track) {
+					try {
+						const result = addTrackToPlaylist(selectedPlaylist, track);
+						setNotice(result.added ? `Added to ${selectedPlaylist}: ${track.title}` : `Already in ${selectedPlaylist}: ${track.title}`);
+						if (state.previousStatus === 'ready') {
+							setState({
+								status: 'ready',
+								results: state.results,
+								selectedIndex: state.selectedIndex,
+								providerName: state.providerName
+							});
+						} else {
+							setState({
+								status: 'selected',
+								results: state.results,
+								selectedIndex: state.selectedIndex,
+								playingTrack: state.playingTrack!,
+								session: state.session!,
+								isPaused: state.isPaused!,
+								providerName: state.providerName
+							});
+						}
+					} catch (error) {
+						setNotice(error instanceof Error ? error.message : 'Could not add track to playlist.');
+					}
+				}
+				return;
+			}
+
+			return;
+		}
+
+		if (state.status === 'creating-playlist') {
+			if (input && input.length === 1 && /^[\w-]/.test(input)) {
+				setState({
+					...state,
+					playlistName: state.playlistName + input
+				});
+				return;
+			}
+
+			if (key.backspace) {
+				setState({
+					...state,
+					playlistName: state.playlistName.slice(0, -1)
+				});
+				return;
+			}
+
+			if (key.return) {
+				const playlistName = state.playlistName.trim();
+
+				if (playlistName.length > 0) {
+					const track = state.results[state.selectedTrackIndex];
+
+					try {
+						createPlaylist(playlistName);
+						const result = addTrackToPlaylist(playlistName, track);
+						setNotice(`Created ${playlistName} and added: ${track.title}`);
+						if (state.previousStatus === 'ready') {
+							setState({
+								status: 'ready',
+								results: state.results,
+								selectedIndex: state.selectedIndex,
+								providerName: state.providerName
+							});
+						} else {
+							setState({
+								status: 'selected',
+								results: state.results,
+								selectedIndex: state.selectedIndex,
+								playingTrack: state.playingTrack!,
+								session: state.session!,
+								isPaused: state.isPaused!,
+								providerName: state.providerName
+							});
+						}
+					} catch (error) {
+						setNotice(error instanceof Error ? error.message : 'Could not create playlist.');
+					}
+				}
+				return;
+			}
+
 			return;
 		}
 
@@ -263,11 +434,39 @@ function InputControls({
 				return;
 			}
 
-			try {
-				const result = addTrackToPlaylist(DEFAULT_PLAYLIST_NAME, track);
-				setNotice(result.added ? `Added to ${DEFAULT_PLAYLIST_NAME}: ${track.title}` : `Already in ${DEFAULT_PLAYLIST_NAME}: ${track.title}`);
-			} catch (error) {
-				setNotice(error instanceof Error ? error.message : 'Could not add track to playlist.');
+			const playlistNames = listPlaylistNames();
+
+			if (playlistNames.length === 0) {
+				setState({
+					status: 'creating-playlist',
+					results: state.results,
+					selectedIndex: state.selectedIndex,
+					selectedTrackIndex: state.selectedIndex,
+					playlistName: '',
+					previousStatus: state.status,
+					...(state.status === 'selected' && {
+						playingTrack: state.playingTrack,
+						session: state.session,
+						isPaused: state.isPaused
+					}),
+					providerName: state.providerName
+				});
+			} else {
+				setState({
+					status: 'selecting-playlist',
+					results: state.results,
+					selectedIndex: state.selectedIndex,
+					selectedTrackIndex: state.selectedIndex,
+					playlistNames,
+					playlistIndex: 0,
+					previousStatus: state.status,
+					...(state.status === 'selected' && {
+						playingTrack: state.playingTrack,
+						session: state.session,
+						isPaused: state.isPaused
+					}),
+					providerName: state.providerName
+				});
 			}
 
 			return;
@@ -452,7 +651,31 @@ function ErrorMessage({message}: {message: string}): React.ReactElement {
 }
 
 function Footer(): React.ReactElement {
-	return <Text dimColor>Up/down choose · Enter play · a add to favorites · Left/right seek · Space pause/resume · s stop · q quit</Text>;
+	return <Text dimColor>Up/down choose · Enter play · a add to playlist · Left/right seek · Space pause/resume · s stop · q quit</Text>;
+}
+
+function PlaylistSelector({playlists, selectedIndex}: {playlists: string[]; selectedIndex: number}): React.ReactElement {
+	return (
+		<Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
+			<Text color="cyan">Select playlist to add track:</Text>
+			{playlists.map((playlist, index) => (
+				<Text key={playlist} color={index === selectedIndex ? 'cyan' : undefined}>
+					{index === selectedIndex ? '>' : ' '} {playlist}
+				</Text>
+			))}
+			<Text dimColor>Up/down choose · Enter confirm · q cancel</Text>
+		</Box>
+	);
+}
+
+function PlaylistNameInput({value}: {value: string}): React.ReactElement {
+	return (
+		<Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
+			<Text color="cyan">Create new playlist:</Text>
+			<Text>Name: <Text color="yellow">{value}_</Text></Text>
+			<Text dimColor>Type name · Enter confirm · q cancel</Text>
+		</Box>
+	);
 }
 
 function renderProgress(progress: number, hasDuration: boolean): string {

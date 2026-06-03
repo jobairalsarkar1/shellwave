@@ -98,7 +98,7 @@ Controls:
 ```text
 Up/down      choose a search result
 Enter        play selected result
-a            add selected result to favorites
+a            add selected result to a playlist
 Left/right   seek backward/forward
 Space        pause/resume
 s            stop and return to results
@@ -109,11 +109,13 @@ When a track completes, shellwave automatically starts the next result from the 
 
 ## Playlists
 
-Save the selected search result to your `favorites` playlist:
+Add the selected search result to a playlist by pressing `a`:
 
 ```text
 a
 ```
+
+If playlists exist, you'll be prompted to choose one. If no playlists exist, you'll be prompted to create a new one. The track is then saved to the selected or newly created playlist.
 
 Manage playlists from the command line:
 
