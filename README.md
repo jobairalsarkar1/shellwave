@@ -66,6 +66,7 @@ Windows:
 ```powershell
 winget install Gyan.FFmpeg
 winget install yt-dlp.yt-dlp
+winget install mpv.mpv
 ```
 
 If `mpv` is available through your package manager, install it for the preferred playback backend.
