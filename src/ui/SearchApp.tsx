@@ -316,6 +316,24 @@ function InputControls({
 		}
 
 		if (state.status === 'selecting-playlist') {
+			if (input === 'n') {
+				setState({
+					status: 'creating-playlist',
+					results: state.results,
+					selectedIndex: state.selectedIndex,
+					selectedTrackIndex: state.selectedTrackIndex,
+					playlistName: '',
+					previousStatus: state.previousStatus,
+					...(state.previousStatus === 'selected' && {
+						playingTrack: state.playingTrack,
+						session: state.session,
+						isPaused: state.isPaused
+					}),
+					providerName: state.providerName
+				});
+				return;
+			}
+
 			if (key.upArrow) {
 				setState({
 					...state,
@@ -667,7 +685,7 @@ function PlaylistSelector({playlists, selectedIndex}: {playlists: string[]; sele
 					{index === selectedIndex ? '>' : ' '} {playlist}
 				</Text>
 			))}
-			<Text dimColor>Up/down choose · Enter confirm · q cancel</Text>
+			<Text dimColor>Up/down choose · Enter confirm · n new playlist · q cancel</Text>
 		</Box>
 	);
 }
