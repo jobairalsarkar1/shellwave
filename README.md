@@ -1,5 +1,8 @@
 # shellwave
 
+[![npm version](https://img.shields.io/npm/v/shellwave.svg)](https://www.npmjs.com/package/shellwave)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+
 A terminal-first YouTube audio player for developers.
 
 Search from your terminal, pick a result with the keyboard, and play audio without opening a browser.
