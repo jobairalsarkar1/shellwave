@@ -369,18 +369,18 @@ function InputControls({
 		}
 
 		if (state.status === 'creating-playlist') {
-			if (input && input.length === 1 && /^[\w-]/.test(input)) {
+			if (isBackspaceInput(input, key)) {
 				setState({
 					...state,
-					playlistName: state.playlistName + input
+					playlistName: state.playlistName.slice(0, -1)
 				});
 				return;
 			}
 
-			if (key.backspace) {
+			if (input && input.length === 1 && /^[\w-]/.test(input)) {
 				setState({
 					...state,
-					playlistName: state.playlistName.slice(0, -1)
+					playlistName: state.playlistName + input
 				});
 				return;
 			}
@@ -654,6 +654,10 @@ function Footer(): React.ReactElement {
 	return <Text dimColor>Up/down choose · Enter play · a add to playlist · Left/right seek · Space pause/resume · s stop · q quit</Text>;
 }
 
+function isBackspaceInput(input: string, key: {backspace?: boolean; delete?: boolean}): boolean {
+	return key.backspace === true || key.delete === true || input === '\u007F' || input === '\b';
+}
+
 function PlaylistSelector({playlists, selectedIndex}: {playlists: string[]; selectedIndex: number}): React.ReactElement {
 	return (
 		<Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
@@ -673,7 +677,7 @@ function PlaylistNameInput({value}: {value: string}): React.ReactElement {
 		<Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
 			<Text color="cyan">Create new playlist:</Text>
 			<Text>Name: <Text color="yellow">{value}_</Text></Text>
-			<Text dimColor>Type name · Enter confirm · q cancel</Text>
+			<Text dimColor>Type name · Backspace edit · Enter confirm · q cancel</Text>
 		</Box>
 	);
 }
