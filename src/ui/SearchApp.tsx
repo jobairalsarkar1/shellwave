@@ -287,7 +287,9 @@ function InputControls({
 	const {exit} = useApp();
 
 	useInput((input, key) => {
-		if (input === 'q' || key.escape) {
+		const commandInput = input.toLowerCase();
+
+		if (commandInput === 'q' || key.escape) {
 			if (state.status === 'selecting-playlist' || state.status === 'creating-playlist') {
 				if (state.previousStatus === 'ready') {
 					setState({
@@ -316,7 +318,7 @@ function InputControls({
 		}
 
 		if (state.status === 'selecting-playlist') {
-			if (input === 'n') {
+			if (commandInput === 'n') {
 				setState({
 					status: 'creating-playlist',
 					results: state.results,
@@ -445,7 +447,7 @@ function InputControls({
 			return;
 		}
 
-		if (input === 'a') {
+		if (commandInput === 'a') {
 			const track = state.results[state.selectedIndex];
 
 			if (!track) {
@@ -491,7 +493,7 @@ function InputControls({
 		}
 
 		if (state.status === 'selected') {
-			if (input === 's') {
+			if (commandInput === 's') {
 				youtubePlayer.stop();
 				setState({
 					...state,
