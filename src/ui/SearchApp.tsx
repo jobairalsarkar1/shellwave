@@ -178,13 +178,13 @@ export function SearchApp({query, initialResults, providerName, autoPlay = false
 				const nextTrack = currentState.results[nextIndex];
 
 				if (!nextTrack) {
+					setNotice('Playback finished.');
+
 					return {
-						...currentState,
-						isPaused: false,
-						session: {
-							state: 'stopped',
-							message: 'Playback finished.'
-						}
+						status: 'ready',
+						results: currentState.results,
+						selectedIndex: currentState.selectedIndex,
+						providerName: currentState.providerName
 					};
 				}
 
